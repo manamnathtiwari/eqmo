@@ -48,7 +48,7 @@ Group:      dS/dt = UDE + γ Σⱼ Aᵢⱼ K(Sᵢ,Sⱼ)(Sⱼ - Sᵢ)
 - **Derived**: Workload estimation
 
 ### **Training Configuration**
-- **Platform**: Kaggle P100 GPU
+- **Platform**: P100 GPU
 - **Duration**: ~6 hours
 - **Cross-Validation**: Leave-One-Subject-Out (15 folds)
 - **Optimization**: Adam (lr=0.005, batch=256)
