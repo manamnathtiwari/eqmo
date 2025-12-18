@@ -1,0 +1,101 @@
+# ================================================================
+# BURNOUT PREDICTION PROJECT - GITIGNORE
+# Multi-Modal UDE for Interpretable Stress Monitoring
+# ================================================================
+
+# ================================================================
+# 1. DATASETS & SERIALIZED FILES (DO NOT TRACK)
+# ================================================================
+
+# All raw and processed data
+data/
+!data/.gitkeep
+
+# Serialized objects (VERY LARGE)
+*.pkl
+*.pickle
+*.joblib
+*.npz
+*.h5
+*.hdf5
+
+# Explicitly ignore sample PKL files too
+data/wesad_sample/
+!data/wesad_sample/.gitkeep
+
+# Processed artifacts
+data/processed/
+!data/processed/.gitkeep
+!data/processed/normalized/.gitkeep
+
+# ================================================================
+# 2. TRAINED MODELS & CHECKPOINTS
+# ================================================================
+results/
+checkpoints/
+runs/
+
+*.pth
+*.pt
+*.ckpt
+
+!results/.gitkeep
+!results/loso_models/.gitkeep
+
+# ================================================================
+# 3. PYTHON & ENVIRONMENT
+# ================================================================
+__pycache__/
+*.py[cod]
+*.so
+
+eqenv/
+venv/
+env/
+ENV/
+.venv/
+
+# ================================================================
+# 4. BUILD / PACKAGE
+# ================================================================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ================================================================
+# 5. NOTEBOOK & CACHE
+# ================================================================
+.ipynb_checkpoints/
+.cache/
+.pytest_cache/
+
+# ================================================================
+# 6. IDE / OS
+# ================================================================
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ================================================================
+# 7. LOGS & TEMP
+# ================================================================
+logs/
+temp/
+tmp/
+*.log
+*.out
+*.err
+events.out.tfevents.*
+
+# ================================================================
+# 8. DOCUMENTATION & CODE (ALLOWED)
+# ================================================================
+!README.md
+!requirements.txt
+!docs/**
+!src/**
+!notebooks/**

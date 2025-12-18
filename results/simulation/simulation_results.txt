@@ -1,0 +1,3 @@
+Scenario A Peak: 1.0
+Scenario B Peak: 0.8574269925205119
+Reduction: 14.25730074794881%

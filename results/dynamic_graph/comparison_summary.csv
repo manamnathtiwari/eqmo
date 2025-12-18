@@ -1,0 +1,4 @@
+Model,Final_Mean_Stress,Final_Variance,Variance_Reduction_%
+Uncoupled,0.13171782,0.4641028,0.0
+Static Graph,0.073068716,0.25062057,45.99890899658203
+Dynamic Graph,0.09975252,0.27409372,40.941162109375
