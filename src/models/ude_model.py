@@ -7,31 +7,35 @@ import math
 class UDE(nn.Module):
     """
     Universal Differential Equation for stress dynamics.
-    ENHANCED: Multi-modal feature input support.
+    MULTI-COEFFICIENT VERSION: Feature-specific sensitivities for personalization.
     
-    Model: dS/dt = -β*S + α*W + NN(S, Features)
+    Model: dS/dt = -β*S + Σᵢ αᵢ*Fᵢ + NN(S, Features)
     
     Where:
     - S: Stress level (state variable)
-    - W: Workload (heart rate proxy)
-    - Features: Multi-modal physiological features (EDA, Temp, Resp, ACC, EMG, HRV)
-    - β: Recovery rate (higher = faster stress decay, GOOD)
-    - α: Sensitivity (higher = more stressed by workload, BAD)
-    - NN: Neural network correction term for unmodeled dynamics
+    - Fᵢ: Individual physiological features (HRV, EDA, Temp, etc.)
+    - αᵢ: Feature-specific sensitivities (18 parameters, one per feature)
+    - β: Recovery rate (single parameter - universal across features)
+    - NN: Neural network correction term for nonlinear dynamics
     
-    Parameters are constrained to be positive via softplus transformation.
+    KEY CHANGE: Instead of single α (workload sensitivity), we now have α₁...α₁₈
+    (one sensitivity coefficient per physiological feature).
+    
+    This enables rich personalization:
+    - Person A: High α_HRV, low α_EDA → "Cardiac stress responder"
+    - Person B: Low α_HRV, high α_EDA → "Anxiety stress responder"
     """
     def __init__(self, hidden_dim=64, num_features=18):
         """
         Args:
-            hidden_dim: Size of hidden layers (increased from 32 to 64 for richer features)
-            num_features: Number of input features (default 18 for multi-modal)
+            hidden_dim: Size of hidden layers in neural network
+            num_features: Number of input features (default 18 for multi-modal WESAD)
         """
         super(UDE, self).__init__()
         
-        # Neural Network: g(S, Features) -> dS_nn
+        # Neural Network: g(S, Features) -> dS_nn (nonlinear correction)
         # Input: Stress (1) + All Features (num_features)
-        input_dim = 1 + num_features  # S + all features
+        input_dim = 1 + num_features
         
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -41,11 +45,15 @@ class UDE(nn.Module):
             nn.Linear(hidden_dim, 1)
         )
         
-        # Known parameters (learnable, raw values before softplus)
-        # dS = -beta * S + alpha * W
-        # Initialize such that softplus gives reasonable starting values
+        # === MULTI-COEFFICIENT PARAMETERS ===
+        # Recovery rate (single, shared across all features)
         self._beta_raw = nn.Parameter(torch.tensor([-2.9]))  # softplus(-2.9) ≈ 0.05
-        self._alpha_raw = nn.Parameter(torch.tensor([-2.2]))  # softplus(-2.2) ≈ 0.1
+        
+        # Feature-specific sensitivities (vector of 18 parameters)
+        # Each αᵢ controls how much feature i drives stress
+        # Initialize all to same safe value, they'll diverge during training
+        self._alphas_raw = nn.Parameter(torch.ones(num_features) * (-2.2))
+        # This gives ~0.1 for each after softplus (stable start)
         
         # Placeholders for current batch data
         self.current_features = None  # (batch, seq_len, num_features)
@@ -58,9 +66,9 @@ class UDE(nn.Module):
         return F.softplus(self._beta_raw)
     
     @property
-    def alpha(self):
-        """Sensitivity to workload (always positive via softplus)"""
-        return F.softplus(self._alpha_raw)
+    def alphas(self):
+        """Feature-specific sensitivities (always positive via softplus)"""
+        return F.softplus(self._alphas_raw)  # Shape: (num_features,)
 
     def set_current_batch(self, t, features):
         """
@@ -83,7 +91,6 @@ class UDE(nn.Module):
         Returns:
             Interpolated features tensor (batch, num_features)
         """
-        # Use math.floor for efficiency (no tensor creation)
         idx_low = int(math.floor(t_scalar))
         idx_high = idx_low + 1
         
@@ -105,29 +112,50 @@ class UDE(nn.Module):
         """
         Compute dS/dt at time t given current state y.
         
+        MULTI-COEFFICIENT UPDATE:
+        Instead of: dS/dt = -β*S + α*W
+        We now use: dS/dt = -β*S + Σᵢ αᵢ*Fᵢ
+        
         Args:
             t: scalar tensor, current time
-            y: (batch, 1), current stress levels
+            y: (batch,), current stress levels (odeint passes without extra dim)
             
         Returns:
-            dS/dt: (batch, 1), rate of change of stress
+            dS/dt: (batch,), rate of change of stress
         """
-        S = y
+        S = y  # Current stress level (batch,)
         
         # Get all features at current time
         features = self.get_features_at_t(t.item())  # (batch, num_features)
         
-        # Extract workload (first feature, index 0)
-        W = features[:, 0:1]  # (batch, 1) - workload
+        # === MULTI-COEFFICIENT PHYSICS TERM ===
+        # Old: f_known = -beta * S + alpha * W
+        # New: f_known = -beta * S + sum(alphas[i] * features[i])
         
-        # Known dynamics with positive parameter constraints
-        # dS = -beta * S + alpha * W
-        f_known = -self.beta * S + self.alpha * W
+        # Recovery term (universal)
+        recovery = -self.beta * S  # (batch,)
         
-        # Neural network correction term using ALL features
-        # Input: [S, all_features]
-        nn_in = torch.cat([S, features], dim=-1)  # (batch, 1 + num_features)
+        # Feature-weighted accumulation
+        # alphas: (num_features,)
+        # features: (batch, num_features)
+        # We want: sum over features of (alpha_i * feature_i) for each batch
+        feature_contribution = torch.sum(self.alphas * features, dim=-1)  # (batch,)
+        
+        f_known = recovery + feature_contribution  # (batch,)
+        
+        # Neural network correction term (nonlinear dynamics)
+        # Handle both (batch,) and (batch, 1) cases
+        if S.dim() == 1:
+            S_expanded = S.unsqueeze(-1)  # (batch, 1)
+        else:
+            S_expanded = S  # already (batch, 1)
+        
+        nn_in = torch.cat([S_expanded, features], dim=-1)  # (batch, 1 + num_features)
         f_nn = self.net(nn_in)
+        
+        # Return same shape as input
+        if S.dim() == 1:
+            f_nn = f_nn.squeeze(-1)  # (batch,)
         
         return f_known + f_nn
     
@@ -135,11 +163,22 @@ class UDE(nn.Module):
         """
         Get the interpretable (positive) parameter values.
         
+        NEW: Returns all 19 parameters (18 alphas + 1 beta)
+        
         Returns:
-            dict with 'alpha' (sensitivity) and 'beta' (recovery rate)
+            dict with:
+            - 'alphas': array of 18 feature sensitivities
+            - 'beta': recovery rate
+            - 'alpha_mean': average sensitivity (for backward compatibility)
+            - 'risk_score': mean(alphas) / beta (simplified risk metric)
         """
+        alphas_vals = self.alphas.detach().cpu().numpy()
+        beta_val = self.beta.item()
+        
         return {
-            'alpha': self.alpha.item(),
-            'beta': self.beta.item(),
-            'risk_score': self.alpha.item() / (self.beta.item() + 1e-6)
+            'alphas': alphas_vals,  # Array of 18 values
+            'beta': beta_val,
+            'alpha_mean': alphas_vals.mean(),  # Average for comparison
+            'alpha': alphas_vals[0],  # Workload sensitivity (first feature)
+            'risk_score': alphas_vals.mean() / (beta_val + 1e-6)
         }

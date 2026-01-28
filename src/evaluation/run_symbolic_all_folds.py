@@ -30,21 +30,44 @@ def discover_equation_for_model(model_path, fold_num):
     print(f"Learned Parameters: α={alpha:.4f}, β={beta:.4f}, Risk={alpha/(beta+1e-6):.2f}")
     
     # Generate data points for regression
+    # We want to approximate the effective dynamics f(S, W) learned by the high-dim model.
+    # We perform a "Partial Dependence" analysis:
+    # - Vary S and W (Workload is Feature 0)
+    # - Fix all other 17 features to 0 (mean value in normalized space)
+    
     S_vals = np.linspace(0, 1, 50)
     W_vals = np.linspace(0, 1, 50)
     
     S_grid, W_grid = np.meshgrid(S_vals, W_vals)
     S_flat = S_grid.flatten()
     W_flat = W_grid.flatten()
+    n_samples = len(S_flat)
     
-    inputs = torch.tensor(np.stack([S_flat, W_flat], axis=1), dtype=torch.float32)
+    # Construct input vector: [S, W, feat2, feat3, ..., feat18]
+    # S is standalone input (col 0 in cat)
+    # W is feat 0 (col 1 in cat)
+    
+    # 1. Stress Input (N, 1)
+    s_tensor = torch.tensor(S_flat, dtype=torch.float32).unsqueeze(1)
+    
+    # 2. Feature Input (N, 18)
+    feat_tensor = torch.zeros((n_samples, 18), dtype=torch.float32)
+    feat_tensor[:, 0] = torch.tensor(W_flat, dtype=torch.float32) # Set Workload
     
     with torch.no_grad():
-        nn_out = model.net(inputs).numpy().flatten()
+        # UDE.forward expects inputs, but we want to isolate the Neural Term component
+        # accessible via model.net().
+        # UDE.net input is cat([S, features]) -> Shape (N, 19)
+        
+        nn_in = torch.cat([s_tensor, feat_tensor], dim=-1)
+        nn_out = model.net(nn_in).numpy().flatten()
+        
+    # For symbolic regression, we only care about how it depends on S and W
+    inputs = np.stack([S_flat, W_flat], axis=1) # (N, 2) passed to poly features
     
     # Symbolic Regression
     poly = PolynomialFeatures(degree=3, include_bias=True)
-    X_features = poly.fit_transform(inputs.numpy())
+    X_features = poly.fit_transform(inputs)
     feature_names = poly.get_feature_names_out(['S', 'W'])
     
     # Sparse regression

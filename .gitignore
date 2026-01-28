@@ -31,12 +31,12 @@ data/processed/
 # ================================================================
 # 2. TRAINED MODELS & CHECKPOINTS
 # ================================================================
-results/
+# results/  # Temporarily disabled for testing
 checkpoints/
 runs/
 
-*.pth
-*.pt
+# *.pth  # Temporarily disabled for testing
+# *.pt   # Temporarily disabled for testing
 *.ckpt
 
 !results/.gitkeep
