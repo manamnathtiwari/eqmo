@@ -37,22 +37,25 @@ def load_subject_parameters(models_dir, device):
         model = UDE().to(device)
         model.load_state_dict(torch.load(os.path.join(models_dir, f), map_location=device))
         
-        # Extract
-        alpha = model.alpha.item() # Sensitivity
-        beta = model.beta.item()   # Recovery
-        
+        # Extract — alphas is a vector of 18 feature sensitivities
+        alphas = model.alphas.detach().cpu().numpy()  # (18,)
+        alpha_mean = float(alphas.mean())  # Mean sensitivity for risk calc
+        beta = model.beta.item()           # Recovery rate
+
         # ID
         fold_idx = int(f.split('_')[-1].split('.')[0])
-        subject_id = f"S{fold_idx+1}" # S2, S3, etc. (Approximate mapping)
+        subject_id = f"S{fold_idx+1}"
         
         params.append({
             'Subject': subject_id,
-            'Alpha': alpha,
+            'Alpha': alpha_mean,  # Mean of 18 feature sensitivities
             'Beta': beta,
-            'Risk': alpha / (beta + 1e-6)
+            'Risk': alpha_mean / (beta + 1e-6),
+            'Alphas_Full': alphas,  # Full 18-dim profile
         })
         
     return pd.DataFrame(params)
+
 
 def simulate_group_dynamics(participants, duration_mins=60, dt=0.1, diffusion_coef=0.5):
     """

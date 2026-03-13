@@ -4,16 +4,29 @@ import pandas as pd
 import numpy as np
 import math
 
-# Define the expected multi-modal features
+# Define the expected multi-modal features (NORMALIZED versions)
+# These correspond to the Z-scored _norm columns in the processed data
 FEATURE_COLUMNS = [
-    'workload',  # Index 0 - used in f_known term
-    'hrv_rmssd', 'hrv_sdnn', 'hrv_pnn50', 'hrv_lf_hf',
-    'heart_rate',
-    'eda_mean', 'eda_std', 'eda_peaks',
-    'resp_mean', 'resp_std', 'resp_rate',
-    'temp_mean', 'temp_std',
-    'activity_level', 'activity_std',
-    'emg_mean', 'emg_std' 
+    'workload_norm',
+    'hrv_rmssd_norm', 'hrv_sdnn_norm', 'hrv_pnn50_norm', 'hrv_lf_hf_norm',
+    'heart_rate_norm',
+    'eda_mean_norm', 'eda_std_norm', 'eda_peaks_norm',
+    'resp_mean_norm', 'resp_std_norm', 'resp_rate_norm',
+    'temp_mean_norm', 'temp_std_norm',
+    'activity_level_norm', 'activity_std_norm',
+    'emg_mean_norm', 'emg_std_norm' 
+]
+
+# Human-readable display names for plots and equations
+FEATURE_DISPLAY_NAMES = [
+    'Workload',
+    'HRV_RMSSD', 'HRV_SDNN', 'HRV_pNN50', 'HRV_LF/HF',
+    'Heart Rate',
+    'EDA_Mean', 'EDA_Std', 'EDA_Peaks',
+    'Resp_Mean', 'Resp_Std', 'Resp_Rate',
+    'Temp_Mean', 'Temp_Std',
+    'Activity_Mean', 'Activity_Std',
+    'EMG_Mean', 'EMG_Std'
 ]
 
 class StressDataset(Dataset):

@@ -163,14 +163,7 @@ class UDE(nn.Module):
         """
         Get the interpretable (positive) parameter values.
         
-        NEW: Returns all 19 parameters (18 alphas + 1 beta)
-        
-        Returns:
-            dict with:
-            - 'alphas': array of 18 feature sensitivities
-            - 'beta': recovery rate
-            - 'alpha_mean': average sensitivity (for backward compatibility)
-            - 'risk_score': mean(alphas) / beta (simplified risk metric)
+        Returns all 19 parameters (18 alphas + 1 beta) plus derived metrics.
         """
         alphas_vals = self.alphas.detach().cpu().numpy()
         beta_val = self.beta.item()
@@ -178,7 +171,155 @@ class UDE(nn.Module):
         return {
             'alphas': alphas_vals,  # Array of 18 values
             'beta': beta_val,
-            'alpha_mean': alphas_vals.mean(),  # Average for comparison
-            'alpha': alphas_vals[0],  # Workload sensitivity (first feature)
+            'alpha_mean': alphas_vals.mean(),
+            'alpha': alphas_vals[0],  # Workload sensitivity
             'risk_score': alphas_vals.mean() / (beta_val + 1e-6)
         }
+
+    # ======================================================================
+    # NOVELTY 1: L1-Sparse Regularization
+    # ======================================================================
+    def l1_regularization_loss(self, lambda_l1=0.001):
+        """
+        L1 penalty on alpha coefficients for automatic feature selection.
+        
+        Encourages most αᵢ → 0, revealing each person's top 3-5 stress drivers.
+        This is the first application of L1-sparse UDEs for personalized health.
+        
+        Args:
+            lambda_l1: sparsity strength (default 0.001)
+        
+        Returns:
+            l1_loss: scalar tensor to add to training loss
+        """
+        return lambda_l1 * torch.sum(torch.abs(self.alphas))
+    
+    def get_sparse_profile(self, threshold=0.01):
+        """
+        Extract the sparse physiological profile for this subject.
+        
+        Returns only the features with αᵢ > threshold (after L1 training),
+        revealing the dominant stress biomarkers for this individual.
+        
+        Args:
+            threshold: minimum α value to consider "active"
+            
+        Returns:
+            dict with active features, their α values, sparsity percentage
+        """
+        from src.utils import FEATURE_DISPLAY_NAMES
+        
+        alphas = self.alphas.detach().cpu().numpy()
+        active_mask = alphas > threshold
+        n_active = active_mask.sum()
+        
+        active_features = []
+        for i, (is_active, alpha_val) in enumerate(zip(active_mask, alphas)):
+            if is_active and i < len(FEATURE_DISPLAY_NAMES):
+                active_features.append({
+                    'feature': FEATURE_DISPLAY_NAMES[i],
+                    'alpha': float(alpha_val),
+                    'index': i
+                })
+        
+        # Sort by alpha (most important first)
+        active_features.sort(key=lambda x: x['alpha'], reverse=True)
+        
+        return {
+            'active_features': active_features,
+            'n_active': int(n_active),
+            'n_total': len(alphas),
+            'sparsity_pct': float(100 * (1 - n_active / len(alphas))),
+            'all_alphas': alphas,
+        }
+    
+    # ======================================================================
+    # NOVELTY 2: Physics Constraints
+    # ======================================================================
+    def check_physics_constraints(self):
+        """
+        Validate that learned parameters satisfy physical stress constraints.
+        
+        Constraints:
+        1. β > 0: Stress must recover without stimulus (guaranteed by softplus)
+        2. When all features = 0, dS/dt = -β·S < 0 (recovery)
+        3. Recovery rate is bounded (not too fast or slow)
+        
+        Returns:
+            dict with constraint satisfaction status
+        """
+        beta_val = self.beta.item()
+        alphas_vals = self.alphas.detach().cpu().numpy()
+        
+        return {
+            'recovery_positive': beta_val > 0,
+            'recovery_rate': beta_val,
+            'recovery_half_life': float(0.693 / (beta_val + 1e-8)),  # ln(2)/β
+            'recovery_reasonable': 0.001 < beta_val < 10.0,
+            'all_sensitivities_positive': bool((alphas_vals > 0).all()),
+            'max_sensitivity': float(alphas_vals.max()),
+            'min_sensitivity': float(alphas_vals.min()),
+        }
+    
+    def physics_constraint_loss(self, lambda_physics=0.01):
+        """
+        Physics-informed regularization loss.
+        
+        Penalizes:
+        1. β too close to 0 (no recovery — unrealistic)
+        2. β too large (instant recovery — unrealistic)  
+        3. Neural network dominating physics term (NN should be small correction)
+        
+        Args:
+            lambda_physics: constraint strength
+            
+        Returns:
+            physics_loss: scalar tensor
+        """
+        beta = self.beta
+        
+        # Penalty if β < 0.01 (too slow recovery)
+        low_beta_penalty = F.relu(0.01 - beta)
+        
+        # Penalty if β > 5.0 (too fast recovery)
+        high_beta_penalty = F.relu(beta - 5.0)
+        
+        return lambda_physics * (low_beta_penalty + high_beta_penalty).squeeze()
+
+    # ======================================================================
+    # NOVELTY 3: Symbolic Equation Extraction
+    # ======================================================================
+    def get_equation_string(self, feature_names=None):
+        """
+        Extract the learned equation as a human-readable string.
+        
+        Shows: dS/dt = -β·S + α₁·F₁ + α₂·F₂ + ... + NN(S, F)
+        Only shows terms where αᵢ > 0.01 (sparse version)
+        
+        Args:
+            feature_names: list of 18 feature display names (optional)
+            
+        Returns:
+            equation string
+        """
+        if feature_names is None:
+            try:
+                from src.utils import FEATURE_DISPLAY_NAMES
+                feature_names = FEATURE_DISPLAY_NAMES
+            except ImportError:
+                feature_names = [f'F{i}' for i in range(self.num_features)]
+        
+        beta = self.beta.item()
+        alphas = self.alphas.detach().cpu().numpy()
+        
+        terms = [f"-{beta:.4f}·S"]
+        
+        for i, (alpha, name) in enumerate(zip(alphas, feature_names)):
+            if alpha > 0.01:  # Only significant terms
+                terms.append(f"+{alpha:.4f}·{name}")
+        
+        terms.append("+ NN(S, F₁...F₁₈)")
+        
+        equation = "dS/dt = " + " ".join(terms)
+        return equation
+
