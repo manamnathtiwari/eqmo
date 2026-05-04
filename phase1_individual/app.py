@@ -4,7 +4,7 @@ MC-UDE Stress Prediction Demo
 Interactive Streamlit app demonstrating the Multi-Coefficient
 Universal Differential Equation model for interpretable stress prediction.
 
-Run:  streamlit run app.py
+Run:  streamlit run phase1_individual/app.py
 """
 import streamlit as st
 import torch
@@ -39,7 +39,8 @@ st.set_page_config(
 # Paths
 # ============================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data", "processed", "normalized")
+PROJECT_ROOT = os.path.dirname(BASE_DIR)  # burnout_project/ (one level up)
+DATA_DIR = os.path.join(PROJECT_ROOT, "data", "processed", "normalized")
 MODELS_DIR = os.path.join(BASE_DIR, "mc_ude_results")
 
 FEATURE_COLUMNS = [

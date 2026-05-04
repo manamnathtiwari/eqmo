@@ -1,0 +1,23 @@
+{
+  "num_cohorts": 2,
+  "cohorts": {
+    "Cardiac Responder": {
+      "size": 14,
+      "beta": 0.062046557664871216,
+      "top_features": {
+        "Heart Rate": 0.0883,
+        "Workload": 0.0881,
+        "EDA_Std": 0.0807
+      }
+    },
+    "Cognitive Responder": {
+      "size": 1,
+      "beta": 0.05611998960375786,
+      "top_features": {
+        "Resp_Mean": 0.1101,
+        "Resp_Rate": 0.1084,
+        "Temp_Mean": 0.108
+      }
+    }
+  }
+}

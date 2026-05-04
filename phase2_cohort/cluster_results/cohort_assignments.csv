@@ -1,0 +1,16 @@
+Subject,Fold,Cohort_Label,Cohort_Name,Top_Feature,Beta
+S002,1,0,Cardiac Responder,Heart Rate,0.06508348137140274
+S003,2,1,Cognitive Responder,Workload,0.0672987625002861
+S004,3,0,Cardiac Responder,Heart Rate,0.0651811957359314
+S005,4,0,Cardiac Responder,Heart Rate,0.06549478322267532
+S006,5,0,Cardiac Responder,Heart Rate,0.0634840875864029
+S007,6,0,Cardiac Responder,Heart Rate,0.06340832263231277
+S008,7,0,Cardiac Responder,Heart Rate,0.06444625556468964
+S009,8,0,Cardiac Responder,Heart Rate,0.06476525217294693
+S010,9,0,Cardiac Responder,Heart Rate,0.06432059407234192
+S011,10,0,Cardiac Responder,Heart Rate,0.06445851922035217
+S013,11,0,Cardiac Responder,Workload,0.06428848952054977
+S014,12,0,Cardiac Responder,Heart Rate,0.06644342839717865
+S015,13,0,Cardiac Responder,Heart Rate,0.06583023816347122
+S016,14,0,Cardiac Responder,Temp_Mean,0.0649053081870079
+S017,15,0,Cardiac Responder,Heart Rate,0.06532715260982513
